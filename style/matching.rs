@@ -739,15 +739,24 @@ trait PrivateMatchMethods: TElement {
         // Starting animations is expensive, because we have to recalculate the style
         // for all the keyframes. We only want to do this if we think that there's a
         // chance that the animations really changed.
-        if needs_animations_update {
+        if needs_animations_update || animation_set.needs_script_animation_update() {
             let mut resolver = StyleResolverForElement::new(
                 *self,
                 context,
                 RuleInclusion::All,
                 PseudoElementResolution::IfApplicable,
             );
-
-            animation_set.update_animations_for_new_style::<Self>(
+            if needs_animations_update {
+                animation_set.update_animations_for_new_style::<Self>(
+                    *self,
+                    &shared_context,
+                    &new_values,
+                    &mut resolver,
+                );
+            }
+            // Script animations added since the last restyle resolve their
+            // keyframes here; the set is then dirty and re-cascades below.
+            animation_set.update_script_animations_for_new_style::<Self>(
                 *self,
                 &shared_context,
                 &new_values,
