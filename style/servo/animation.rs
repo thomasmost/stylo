@@ -682,6 +682,9 @@ impl ComputedKeyframe {
                         // > using the computed values of the properties being animated. If a 100% or to keyframe is
                         // > not specified, then the user agent constructs a 100% keyframe using the computed values
                         // > of the properties being animated.
+                        // Web Animations section 5.3 gives the implicit keyframe at 0 a linear
+                        // easing. Here the interval from this step keeps the first keyframe's
+                        // easing, as the CSS animation path does, so the two paths agree.
                         if step_index == 0 || remaining_steps.as_slice().is_empty() {
                             return AnimationValueOrReference::AnimationValue(
                                 animation_values_from_style[property_index].clone(),
@@ -2438,8 +2441,26 @@ mod tests {
     fn cancel_all_animations_drops_script_animations() {
         let mut set = ElementAnimationSet::default();
         set.start_script_animation(script_animation(1));
+        set.dirty = false;
         set.cancel_all_animations();
         assert!(set.is_empty());
+        assert!(set.dirty);
+    }
+
+    #[test]
+    fn equal_offset_script_keyframes_are_not_merged() {
+        let steps = [
+            opacity_step(0.0, Some(1.0), linear()),
+            opacity_step(0.5, Some(0.25), linear()),
+            opacity_step(0.5, Some(0.75), linear()),
+            opacity_step(1.0, Some(0.0), linear()),
+        ];
+        // At the shared offset the later keyframe's value wins.
+        assert_eq!(sampled_opacity(&steps, 0.5), 0.75);
+        // Just before it, the interval runs toward the earlier keyframe at 0.5.
+        assert!((sampled_opacity(&steps, 0.4) - 0.4).abs() < 1e-6);
+        // After it, the interval runs from the later keyframe to 1.0.
+        assert_eq!(sampled_opacity(&steps, 0.75), 0.375);
     }
 
     #[test]
